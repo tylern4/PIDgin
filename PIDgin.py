@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import argparse
 import psutil
 from time import sleep, strftime
@@ -6,7 +7,6 @@ import logging
 
 global plotting
 try:
-    import trash
     import pandas as pd
     import matplotlib.pyplot as plt
     import numpy as np
@@ -187,6 +187,9 @@ if __name__ == '__main__':
                         default=None)
     args = parser.parse_args()
 
+    # TODO:
+    # Cleaner way to check if we want to delete the watch pid
+    # or use a file instead of a default file or number
     try:
         os.remove('watch.pid')
     except:
@@ -196,6 +199,13 @@ if __name__ == '__main__':
     if not args.just_plot:
         runner(pid=args.pid, outfile=args.outfile, poleRate=args.rate)
 
+    # TODO:
+    # Need to think about the logic more to clean this up
+
     # Make sure we want to plot and running plotting
-    if args.just_plot or not args.no_plot:
+    if not args.no_plot:
+        pass
+    elif args.just_plot:
+        plotter(infile=args.outfile)
+    else:
         plotter(infile=args.outfile)
