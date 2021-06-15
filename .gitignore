@@ -112,3 +112,10 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+
+# For PIDgin
+stats.csv
+watch.pid
+cpu.png
+mem.png
