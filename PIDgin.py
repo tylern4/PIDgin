@@ -7,6 +7,8 @@ import logging
 
 global plotting
 try:
+    import matplotlib  # noqa
+    matplotlib.use('agg')  # noqa
     import pandas as pd
     import matplotlib.pyplot as plt
     import numpy as np
