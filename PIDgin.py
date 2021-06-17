@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import argparse
 import psutil
-from time import sleep, strftime
+from time import sleep
+from datetime import datetime
 import os
 import logging
 
@@ -15,10 +16,6 @@ try:
     plotting = True
 except ImportError:
     plotting = False
-
-
-logging.basicConfig(
-    format='%(asctime)s %(levelname)s ==> %(message)s', level=logging.INFO)
 
 
 def getProcessPid(pidfile: str = "watch.pid") -> int:
@@ -91,14 +88,14 @@ def runner(pid: int = None, outfile: str = "stats.csv", poleRate: float = 0.1):
 
     # Get our processing object based on the pid
     proc = getProcess(pid)
-    logging.info(f'{proc.cmdline()}')
 
     stats_file = open(outfile, "w")
     # TODO make a good header for extra info like:
     # proc.cmdline() num_threads, etc.
 
-    stats_file.write("{},{},{},{},{},{},{}\n".format(
-        "datetime", "num_threads", "cpu_percent", "memory_info", "num_fds", "read_bytes", "write_bytes"
+    stats_file.write("{},{},{},{},{},{},{},{},{}\n".format(
+        "datetime", "num_threads", "cpu_percent", "memory_info", "num_fds",
+        "read_0", "write_0", "read_2", "write_2"
     ))
 
     # Keep pulling data from the process while it's running
@@ -110,14 +107,16 @@ def runner(pid: int = None, outfile: str = "stats.csv", poleRate: float = 0.1):
         try:
             pData = proc.as_dict()
             # Add new line to the file with relevant data
-            stats_file.write("{},{},{},{},{},{},{}\n".format(
-                strftime("%Y-%m-%d %H:%M:%S"),
+            stats_file.write("{},{},{},{},{},{},{},{},{}\n".format(
+                datetime.now().strftime("%m-%d-%Y %H:%M:%S.%f"),
                 pData['num_threads'],
                 pData['cpu_percent'],
                 pData['memory_info'][0],
                 pData['num_fds'],
-                pData['io_counters'][2] if 'io_counters' in pData else np.nan,
-                pData['io_counters'][3] if 'io_counters' in pData else np.nan,
+                pData['io_counters'][0] if 'io_counters' in pData else np.nan,
+                pData['io_counters'][1] if 'io_counters' in pData else np.nan,
+                pData['io_counters'][4] if 'io_counters' in pData else np.nan,
+                pData['io_counters'][5] if 'io_counters' in pData else np.nan,
             ))
         except:
             # Breaks out of just the loop and not the function
@@ -129,7 +128,7 @@ def runner(pid: int = None, outfile: str = "stats.csv", poleRate: float = 0.1):
     stats_file.close()
 
 
-def plotter(infile: str = "stats.csv"):
+def plotter(infile: str, tag: str = None):
     """
     Plot the results from the runner step. 
     It can be done after the fact with `-j` option to just plot.
@@ -149,38 +148,67 @@ def plotter(infile: str = "stats.csv"):
         )
         exit(300)
 
-    logging.info("Running plotting.")
+    logging.info(f"Running plotting with tag {tag}.")
+    # Load in dataframe and put 0th column as DateTimeIndex
     df = pd.read_csv(infile,
                      index_col=[0],
-                     dtype={0: str, 1: np.float16, 2: float,
-                            3: float, 4: float, 5: float},
                      parse_dates=[0])
 
     df['cpu_percent'].plot()
-    df['cpu_percent'].rolling('60s').mean().plot()
-    df['cpu_percent'].rolling('120s').mean().plot()
-    plt.savefig("cpu.png")
+    df['cpu_percent'].rolling('60s').mean().plot(label="Average usage (1m)")
+    df['cpu_percent'].rolling('120s').mean().plot(label="Average usage (2m)")
+    plt.title(f"cpu percentage {tag}")
+    plt.ylabel("cpu percentage [%]")
+    plt.xlabel("time")
+    lgn = plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
 
+    if tag is None:
+        plt.savefig("cpu.png")
+    else:
+        plt.savefig(f"{tag}_cpu.png",
+                    bbox_extra_artists=[lgn],
+                    bbox_inches='tight')
+
+    # Clear plot for next plot
+    # Faster then making a new one
     plt.clf()
+
     df['memory_info'] = df['memory_info'] / 1024**3
     df['memory_info'].plot(label="Raw memory usage")
     df['memory_info'].rolling('60s').mean().plot(
         label="Average usage (1m)")
     df['memory_info'].rolling('120s').mean().plot(
         label="Average usage (2m)")
-    plt.legend()
-    plt.savefig("mem.png")
+    plt.title(f"memory usage {tag}")
+    plt.ylabel("memory usage [MB]")
+    plt.xlabel("time")
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+
+    if tag is None:
+        plt.savefig("mem.png")
+    else:
+        plt.savefig(f"{tag}_mem.png",
+                    bbox_extra_artists=[lgn],
+                    bbox_inches='tight')
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument("-t", "--tag", type=str,
+                        help="Tags the process and gives a name to the plots and statistcs csv file.", default=None)
     parser.add_argument("-o", "--outfile", type=str,
-                        help="Output file name for csv. Also used for the input of the plotting funtion.",
-                        default="stats.csv")
+                        help="Output file name for csv.",
+                        default=None)
+    parser.add_argument("-I", "--infile", type=str,
+                        help="Input csv for plotting. Only used with -j option.",
+                        default=None)
     parser.add_argument("-np", "--no-plot", action="store_false",
                         help="Plot the data.", default=True)
     parser.add_argument("-j", "--just-plot", action="store_true",
                         help="Don't run over a process and just plot data.",
+                        default=False)
+    parser.add_argument("-d", "--debug", action="store_true",
+                        help="Run with debugging info.",
                         default=False)
     parser.add_argument("-r", "--rate", type=float,
                         help="Polling rate for process.", default=0.1)
@@ -188,6 +216,12 @@ if __name__ == '__main__':
                         help="Process id if not using watch.pid",
                         default=None)
     args = parser.parse_args()
+
+    if args.debug:
+        logging.basicConfig(
+            format='%(asctime)s %(levelname)s ==> %(message)s', level=logging.INFO)
+    else:
+        logging.basicConfig(level=logging.FATAL)
 
     # TODO:
     # Cleaner way to check if we want to delete the watch pid
@@ -197,17 +231,31 @@ if __name__ == '__main__':
     except:
         pass
 
+    nowtime = datetime.now().strftime("%m:%d:%Y-%H:%M:%S")
+
+    # Make out output stats csv name
+    if args.outfile is not None:
+        outfile = args.outfile
+    elif args.tag is not None:
+        outfile = f'{args.tag}_stats_{nowtime}.csv'
+    else:
+        outfile = f'stats_{nowtime}.csv'
+
+    logging.info(f'Saving csv to {outfile}')
+    logging.info(f'Using tag {args.tag}')
+
     # Skip running if we just want to plot
     if not args.just_plot:
-        runner(pid=args.pid, outfile=args.outfile, poleRate=args.rate)
+        runner(pid=args.pid, outfile=outfile, poleRate=args.rate)
 
     # TODO:
     # Need to think about the logic more to clean this up
-
     # Make sure we want to plot and running plotting
     if not args.no_plot:
         pass
     elif args.just_plot:
-        plotter(infile=args.outfile)
+        plotter(infile=args.infile,
+                tag=f"{args.tag}_{nowtime}" if args.tag is not None else None)
     else:
-        plotter(infile=args.outfile)
+        plotter(infile=outfile,
+                tag=f"{args.tag}_{nowtime}" if args.tag is not None else None)
