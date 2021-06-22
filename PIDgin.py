@@ -93,9 +93,10 @@ def runner(pid: int = None, outfile: str = "stats.csv", poleRate: float = 0.1):
     # TODO make a good header for extra info like:
     # proc.cmdline() num_threads, etc.
 
-    stats_file.write("{},{},{},{},{},{},{},{},{}\n".format(
-        "datetime", "num_threads", "cpu_percent", "memory_info", "num_fds",
-        "read_0", "write_0", "read_2", "write_2"
+    stats_file.write("{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n".format(
+        "datetime", "num_threads", "cpu_percent", "cpu_t_user", "cpu_t_system",
+        "mem_rss", "mem_vms", "mem_shared", "mem_percentage",
+        "num_fds", "read_count", "write_count", "read_chars", "write_chars"
     ))
 
     # Keep pulling data from the process while it's running
@@ -107,18 +108,24 @@ def runner(pid: int = None, outfile: str = "stats.csv", poleRate: float = 0.1):
         try:
             pData = proc.as_dict()
             # Add new line to the file with relevant data
-            stats_file.write("{},{},{},{},{},{},{},{},{}\n".format(
+            stats_file.write("{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n".format(
                 datetime.now().strftime("%m-%d-%Y %H:%M:%S.%f"),
                 pData['num_threads'],
                 pData['cpu_percent'],
-                pData['memory_info'][0],
+                pData['cpu_times'].user,
+                pData['cpu_times'].system,
+                pData['memory_info'].rss,
+                pData['memory_info'].vms,
+                pData['memory_info'].shared if 'shared' in pData['memory_info'] else np.nan,
+                pData['memory_percent'],
                 pData['num_fds'],
-                pData['io_counters'][0] if 'io_counters' in pData else np.nan,
-                pData['io_counters'][1] if 'io_counters' in pData else np.nan,
-                pData['io_counters'][4] if 'io_counters' in pData else np.nan,
-                pData['io_counters'][5] if 'io_counters' in pData else np.nan,
+                pData['io_counters'].read_count if 'io_counters' in pData else np.nan,
+                pData['io_counters'].write_count if 'io_counters' in pData else np.nan,
+                pData['io_counters'].read_chars if 'io_counters' in pData else np.nan,
+                pData['io_counters'].write_chars if 'io_counters' in pData else np.nan,
             ))
-        except:
+        except Exception as e:
+            logging.info(e)
             # Breaks out of just the loop and not the function
             break
         # Sleep for a number of seconds before going to the next loop
@@ -173,11 +180,11 @@ def plotter(infile: str, tag: str = None):
     # Faster then making a new one
     plt.clf()
 
-    df['memory_info'] = df['memory_info'] / 1024**3
-    df['memory_info'].plot(label="Raw memory usage")
-    df['memory_info'].rolling('60s').mean().plot(
+    df['mem_rss'] = df['mem_rss'] * 1e-9
+    df['mem_rss'].plot(label="Raw memory usage")
+    df['mem_rss'].rolling('60s').mean().plot(
         label="Average usage (1m)")
-    df['memory_info'].rolling('120s').mean().plot(
+    df['mem_rss'].rolling('120s').mean().plot(
         label="Average usage (2m)")
     plt.title(f"memory usage {tag}")
     plt.ylabel("memory usage [MB]")
@@ -215,6 +222,7 @@ if __name__ == '__main__':
     parser.add_argument("-i", "--pid", type=int,
                         help="Process id if not using watch.pid",
                         default=None)
+    parser.add_argument('rest', nargs=argparse.REMAINDER)
     args = parser.parse_args()
 
     if args.debug:
@@ -231,7 +239,7 @@ if __name__ == '__main__':
     except:
         pass
 
-    nowtime = datetime.now().strftime("%m:%d:%Y-%H:%M:%S")
+    nowtime = datetime.now().strftime("%m-%d-%Y-%H:%M:%S")
 
     # Make out output stats csv name
     if args.outfile is not None:
@@ -243,10 +251,13 @@ if __name__ == '__main__':
 
     logging.info(f'Saving csv to {outfile}')
     logging.info(f'Using tag {args.tag}')
+    logging.info(f'{args.rest}')
+
+    pid = os.spawnlp(os.P_NOWAIT, args.rest[0], *args.rest)
 
     # Skip running if we just want to plot
     if not args.just_plot:
-        runner(pid=args.pid, outfile=outfile, poleRate=args.rate)
+        runner(pid=pid, outfile=outfile, poleRate=args.rate)
 
     # TODO:
     # Need to think about the logic more to clean this up
