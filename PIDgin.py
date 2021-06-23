@@ -12,7 +12,6 @@ try:
     matplotlib.use('agg')  # noqa
     import pandas as pd
     import matplotlib.pyplot as plt
-    import numpy as np
     plotting = True
 except ImportError:
     plotting = False
@@ -101,6 +100,7 @@ def runner(pid: int = None, outfile: str = "stats.csv", poleRate: float = 0.1):
 
     # Keep pulling data from the process while it's running
     while proc.is_running():
+        # logging.info(proc.cmdline())
         # In a rare case at the end of the job running
         # we can get that the process is_running to be true
         # but stops while extracting a parameter.
@@ -116,16 +116,17 @@ def runner(pid: int = None, outfile: str = "stats.csv", poleRate: float = 0.1):
                 pData['cpu_times'].system,
                 pData['memory_info'].rss,
                 pData['memory_info'].vms,
-                pData['memory_info'].shared if 'shared' in pData['memory_info'] else np.nan,
+                pData['memory_info'].shared if 'shared' in pData['memory_info'] else "nan",
                 pData['memory_percent'],
                 pData['num_fds'],
-                pData['io_counters'].read_count if 'io_counters' in pData else np.nan,
-                pData['io_counters'].write_count if 'io_counters' in pData else np.nan,
-                pData['io_counters'].read_chars if 'io_counters' in pData else np.nan,
-                pData['io_counters'].write_chars if 'io_counters' in pData else np.nan,
+                pData['io_counters'].read_count if 'io_counters' in pData else "nan",
+                pData['io_counters'].write_count if 'io_counters' in pData else "nan",
+                pData['io_counters'].read_chars if 'io_counters' in pData else "nan",
+                pData['io_counters'].write_chars if 'io_counters' in pData else "nan",
             ))
+
         except Exception as e:
-            logging.info(e)
+            logging.error(e)
             # Breaks out of just the loop and not the function
             break
         # Sleep for a number of seconds before going to the next loop
@@ -251,9 +252,13 @@ if __name__ == '__main__':
 
     logging.info(f'Saving csv to {outfile}')
     logging.info(f'Using tag {args.tag}')
-    logging.info(f'{args.rest}')
+    logging.info(f'Command: {args.rest}')
 
-    pid = os.spawnlp(os.P_NOWAIT, args.rest[0], *args.rest)
+    # pid = os.spawnlp(os.P_NOWAIT, args.rest[0], *args.rest)
+    if args.rest:
+        pid = os.spawnlp(os.P_NOWAIT, args.rest[0], *args.rest)
+    else:
+        pid = args.pid
 
     # Skip running if we just want to plot
     if not args.just_plot:
