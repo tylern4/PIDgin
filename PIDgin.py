@@ -88,6 +88,13 @@ def runner(pid: int = None, outfile: str = "stats.csv", poleRate: float = 0.1):
     # Get our processing object based on the pid
     proc = getProcess(pid)
 
+    sleep(2)
+
+    if len(proc.children()) > 0:
+        new_pid = proc.children()[0].pid
+        proc = getProcess(new_pid)
+        logging.info(f"Process had children {new_pid}")
+
     stats_file = open(outfile, "w")
     # TODO make a good header for extra info like:
     # proc.cmdline() num_threads, etc.
@@ -100,7 +107,6 @@ def runner(pid: int = None, outfile: str = "stats.csv", poleRate: float = 0.1):
 
     # Keep pulling data from the process while it's running
     while proc.is_running():
-        # logging.info(proc.cmdline())
         # In a rare case at the end of the job running
         # we can get that the process is_running to be true
         # but stops while extracting a parameter.
