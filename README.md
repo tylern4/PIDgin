@@ -1,8 +1,7 @@
-# PIDgin
+# pagurus
 
-Used for getting the information from a running job based on its PID using psutil.
+Used for getting the information from a running job based on its pid using psutil.
 
-PIDgin waits for a pid to be stored in a file called watch.pid and then reads it and starts extracting information and saving to a csv file. It can also attach to an already running processes by supplying the `--pid` option.
 
 ### As a wrapper script
 ```bash
