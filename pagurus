@@ -5,8 +5,19 @@ from time import sleep
 from datetime import datetime
 import os
 import logging
+from typing import List
 
 from paguruslib import getProcessPid, getProcess
+
+from influxdb_client import InfluxDBClient, Point, WritePrecision
+from influxdb_client.client.write_api import SYNCHRONOUS
+
+# You can generate a Token from the "Tokens Tab" in the UI
+token = "9vd7DHSv4rofSZ2WMT3rKdKZ7riRMM5skw19z7E6P33EiFYOTjNxgjm37TdicJ1DPWyY_HUEsOESSAPkFtMPFw=="
+org = "jaws"
+bucket = "jaws"
+
+client = InfluxDBClient(url="http://localhost:8086", token=token)
 
 
 
@@ -27,7 +38,7 @@ def runner(pid: int = None, outfile: str = "stats.csv", poleRate: float = 0.1):
 
     # Get our processing object based on the pid
     proc = getProcess(pid)
-
+    write_api = client.write_api(write_options=SYNCHRONOUS)
     sleep(2)
 
     if len(proc.children()) > 0:
@@ -53,6 +64,29 @@ def runner(pid: int = None, outfile: str = "stats.csv", poleRate: float = 0.1):
         # So I get all the data as a dict and break if we have any issues
         try:
             pData = proc.as_dict()
+            points = []
+            for key, value in pData.items():
+                if isinstance(value, float) or isinstance(value, int):
+                    points.append(
+                        Point(f"{key}")\
+                            .tag("host", os.getenv("HOSTNAME"))\
+                            .field("used_percent", value)\
+                            .time(datetime.utcnow(), WritePrecision.NS)
+                    )
+            write_api.write(bucket, org, points)
+
+
+            point0 = Point("mem")\
+                .tag("host", os.getenv("HOSTNAME"))\
+                .field("used_percent", pData['memory_info'].vms)\
+                .time(datetime.utcnow(), WritePrecision.NS)
+            
+            point1 = Point("cpu")\
+                .tag("host", os.getenv("HOSTNAME"))\
+                .field("used_percent", pData['cpu_percent'])\
+                .time(datetime.utcnow(), WritePrecision.NS)
+            write_api.write(bucket, org, [point0, point1])
+
             # Add new line to the file with relevant data
             stats_file.write("{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n".format(
                 datetime.now().strftime("%m-%d-%Y %H:%M:%S.%f"),
