@@ -5,63 +5,9 @@ from time import sleep
 from datetime import datetime
 import os
 import logging
-try:
-    import psutil
-except ImportError:
-    import sys
-    print("Error: Install psutil to get statistics!", file=sys.stderr)
 
-def getProcessPid(pidfile: str = "watch.pid") -> int:
-    """
-    Get a process id that was saved in a file.
+from paguruslib import getProcessPid, getProcess
 
-    On unix systems you can get the pid from the last
-    run command with the `$!` environment variable
-    which can be saved to a file like:
-
-    `./test_program &; echo $! > watch.pid`
-
-    Parameters:
-    pidfile (str): File location of pid.
-
-    Returns:
-    int: process pid from file
-    """
-
-    # Wait for ~5 minutes (300 seconds)
-    for _ in range(300):
-        # Try to open the file
-        try:
-            with open(pidfile) as pid:
-                pid = int(pid.readlines()[0].strip())
-                logging.info(f"Getting running process {pid}")
-                return pid
-        # If file not found wait for a second and try again
-        except FileNotFoundError:
-            sleep(1)
-
-    # Should only get here if we've exasted our ~5 minute wait time
-    logging.fatal("Could not attatch to process after 5 minutes...")
-    logging.fatal("Quitting PIDgin process")
-    exit(100)
-
-
-def getProcess(pid: int) -> psutil.Process:
-    """
-    Get psutil process object from the pid.
-
-    Parameters:
-    pid (int): pid you want to get object of.
-
-    Returns:
-    psutil.Process: Process object from psutils
-    """
-    try:
-        return psutil.Process(pid)
-    except psutil.NoSuchProcess:
-        logging.fatal("Could not attatch to process...")
-        logging.fatal("psutil.NoSuchProcess")
-        exit(200)
 
 
 def runner(pid: int = None, outfile: str = "stats.csv", poleRate: float = 0.1):
@@ -162,6 +108,7 @@ if __name__ == '__main__':
     else:
         logging.basicConfig(level=logging.FATAL)
 
+    
     # TODO:
     # Cleaner way to check if we want to delete the watch pid
     # or use a file instead of a default file or number

@@ -3,26 +3,13 @@
 Used for getting the information from a running job based on its pid using psutil.
 
 
-### As a wrapper script
+### Running a program through pagurus
 ```bash
-pagurus.py test_program arg1 --arg2=4
+pagurus -t test test_program arg1 --arg2=4
 ```
 
-### Example Usage slurm
 
+### Plotting results
 ```bash
-python pagurus.py &
-WAITPID=$!
-sleep 10
-test_program arg1 --arg2=4 &
-echo $! > watch.pid
-wait $WAITPID
+hermit -i test_data-time.csv
 ```
-
-### Attaching to a running program
-
-```bash
-test_program arg1 --arg2=4 &
-python pagurus.py -i $!
-```
-
