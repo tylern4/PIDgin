@@ -7,14 +7,17 @@ except ImportError:
     print("Error: Install psutil to get statistics!", file=sys.stderr)
 
 ## TODO: Look into gpu stats as well
-# try:
-#     from pynvml import nvmlInit, NVMLError_LibraryNotFound
-#     try:
-#         nvmlInit()
-#     except NVMLError_LibraryNotFound:
-#         print("Error: NVML Library not installed!", file=sys.stderr)
-# except ImportError:
-#     print("Error: Install pynvml to get GPU statistics!", file=sys.stderr)
+try:
+    from pynvml import *
+    try:
+        nvmlInit()
+        global deviceCount
+        deviceCount = nvmlDeviceGetCount()
+        print(deviceCount)
+    except NVMLError_LibraryNotFound:
+        print("Error: NVML Library not installed!", file=sys.stderr)
+except ImportError:
+    print("Error: Install pynvml to get GPU statistics!", file=sys.stderr)
 
 
 def getProcessPid(pidfile: str = "watch.pid") -> int:

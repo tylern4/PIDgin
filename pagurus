@@ -8,6 +8,20 @@ import logging
 
 from paguruslib import getProcessPid, getProcess
 
+try:
+    from pynvml import *
+    try:
+        nvmlInit()
+        global deviceCount
+        deviceCount = nvmlDeviceGetCount()
+        print(deviceCount)
+    except NVMLError_LibraryNotFound:
+        print("Error: NVML Library not installed!", file=sys.stderr)
+except ImportError:
+    print("Error: Install pynvml to get GPU statistics!", file=sys.stderr)
+
+from pynvml.smi import nvidia_smi
+nvsmi = nvidia_smi.getInstance()
 
 
 def runner(pid: int = None, outfile: str = "stats.csv", poleRate: float = 0.1):
@@ -39,10 +53,11 @@ def runner(pid: int = None, outfile: str = "stats.csv", poleRate: float = 0.1):
     # TODO make a good header for extra info like:
     # proc.cmdline() num_threads, etc.
 
-    stats_file.write("{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n".format(
+    stats_file.write("{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n".format(
         "datetime", "num_threads", "cpu_percent", "cpu_t_user", "cpu_t_system",
         "mem_rss", "mem_vms", "mem_shared", "mem_percentage",
-        "num_fds", "read_count", "write_count", "read_chars", "write_chars"
+        "num_fds", "read_count", "write_count", "read_chars", "write_chars",
+        "gpu_0", "gpu_mem_0","gpu_1", "gpu_mem_1","gpu_2", "gpu_mem_2", "gpu_3", "gpu_mem_3"
     ))
 
     # Keep pulling data from the process while it's running
@@ -54,7 +69,7 @@ def runner(pid: int = None, outfile: str = "stats.csv", poleRate: float = 0.1):
         try:
             pData = proc.as_dict()
             # Add new line to the file with relevant data
-            stats_file.write("{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n".format(
+            stats_file.write("{},{},{},{},{},{},{},{},{},{},{},{},{},{}".format(
                 datetime.now().strftime("%m-%d-%Y %H:%M:%S.%f"),
                 pData['num_threads'],
                 pData['cpu_percent'],
@@ -71,6 +86,21 @@ def runner(pid: int = None, outfile: str = "stats.csv", poleRate: float = 0.1):
                 pData['io_counters'].write_chars if 'io_counters' in pData else "nan",
             ))
 
+    
+            # print(nvsmi.DeviceQuery('memory.free, memory.total, utilization.gpu'))
+
+            for i in range(nvmlDeviceGetCount()):
+                handle = nvmlDeviceGetHandleByIndex(i)
+                # print(nvmlDeviceGetMemoryInfo(handle))
+                utilization = nvmlDeviceGetUtilizationRates(handle)
+                memory = nvmlDeviceGetMemoryInfo(handle)
+                # print(utilization.gpu)
+                # print(utilization.memory)
+                stats_file.write(f",{utilization.gpu},{(memory.total-memory.free)/1024/1024}")
+
+            stats_file.write("\n")
+
+                
         except Exception as e:
             logging.error(e)
             # Breaks out of just the loop and not the function
