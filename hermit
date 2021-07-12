@@ -1,9 +1,56 @@
 #!/usr/bin/env python3
 import argparse
 import logging
-import pandas as pd
 
-from paguruslib.plotting import cpuPlot, memPlot
+try:
+    import matplotlib  # noqa
+    matplotlib.use('agg')  # noqa
+    import pandas as pd
+    import matplotlib.pyplot as plt
+except ImportError:
+    import sys
+    print("Error: Install pandas and matplotlib to plot!", file=sys.stderr)
+
+
+def cpuPlot(df, tag):
+    df['cpu_percent'].plot()
+    df['cpu_percent'].rolling('60s').mean().plot(label="Average usage (1m)")
+    df['cpu_percent'].rolling('120s').mean().plot(label="Average usage (2m)")
+    plt.title(f"cpu percentage {tag}")
+    plt.ylabel("cpu percentage [%]")
+    plt.xlabel("time")
+    lgn = plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+
+    if tag is None:
+        plt.savefig("cpu.png")
+    else:
+        plt.savefig(f"{tag}_cpu.png",
+                    bbox_extra_artists=[lgn],
+                    bbox_inches='tight')
+    plt.clf()
+
+
+def memPlot(df, tag):
+    df['mem_rss'] = df['mem_rss'] * 1e-9
+    df['mem_rss'].plot(label="Raw memory usage")
+    df['mem_rss'].rolling('60s').mean().plot(
+        label="Average usage (1m)")
+    df['mem_rss'].rolling('120s').mean().plot(
+        label="Average usage (2m)")
+    plt.title(f"memory usage {tag}")
+    plt.ylabel("memory usage [MB]")
+    plt.xlabel("time")
+    lgn = plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+
+    if tag is None:
+        plt.savefig("mem.png")
+    else:
+        plt.savefig(f"{tag}_mem.png",
+                    bbox_extra_artists=[lgn],
+                    bbox_inches='tight')
+
+    plt.clf()
+
 
 def plotter(infile: str, tag: str):
     """
@@ -27,11 +74,10 @@ def plotter(infile: str, tag: str):
     memPlot(df, tag)
 
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-t", "--tag", type=str,
-                        help="Tags the process and gives a name to the plots and statistcs csv file.", 
+                        help="Tags the process and gives a name to the plots and statistcs csv file.",
                         default=None)
     parser.add_argument("-d", "--debug", action="store_true",
                         help="Run with debugging info.",
@@ -48,9 +94,7 @@ if __name__ == '__main__':
     else:
         logging.basicConfig(level=logging.FATAL)
 
-
     logging.info(f'Using tag {args.tag}')
 
     plotter(infile=args.input,
             tag=f"{args.tag}" if args.tag is not None else None)
-
