@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+import argparse
+
+from time import sleep
+from datetime import datetime
+import os
+import logging
+
+def read_cgroup_mem():
+    with open('/sys/fs/cgroup/memory/memory.usage_in_bytes', 'r') as mem:
+        total_mem = mem.read()
+    
+    print(total_mem)
+    return total_mem
+
+
+def runner(outfile: str = "stats.csv", poleRate: float = 0.1):
+    """
+    Runs while your executable is still running and logs info
+    about running process to a csv file.
+
+    Args:
+        outfile (str, optional): output filename. Defaults to "stats.csv".
+        poleRate (float, optional): Time to sleep before getting new data. Defaults to 0.1.
+    """
+
+    sleep(2)
+
+    stats_file = open(outfile, "w")
+
+    stats_file.write("{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n".format(
+        "datetime", "num_threads", "cpu_percent", "cpu_t_user", "cpu_t_system",
+        "mem_rss", "mem_vms", "mem_shared", "mem_percentage",
+        "num_fds", "read_count", "write_count", "read_chars", "write_chars"
+    ))
+    its = 0
+    # Keep pulling data from the process while it's running
+    while its < 100:
+        its += 1
+        # In a rare case at the end of the job running
+        # we can get that the process is_running to be true
+        # but stops while extracting a parameter.
+        # So I get all the data as a dict and break if we have any issues
+        try:
+            read_cgroup_mem()
+            # pData = proc.as_dict()
+            # # Add new line to the file with relevant data
+            # stats_file.write("{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n".format(
+            #     datetime.now().strftime("%m-%d-%Y %H:%M:%S.%f"),
+            #     pData['num_threads'],
+            #     pData['cpu_percent'],
+            #     pData['cpu_times'].user,
+            #     pData['cpu_times'].system,
+            #     pData['memory_info'].rss,
+            #     pData['memory_info'].vms,
+            #     pData['memory_info'].shared if 'shared' in pData['memory_info'] else "nan",
+            #     pData['memory_percent'],
+            #     pData['num_fds'],
+            #     pData['io_counters'].read_count if 'io_counters' in pData else "nan",
+            #     pData['io_counters'].write_count if 'io_counters' in pData else "nan",
+            #     pData['io_counters'].read_chars if 'io_counters' in pData else "nan",
+            #     pData['io_counters'].write_chars if 'io_counters' in pData else "nan",
+            # ))
+
+        except Exception as e:
+            logging.error(e)
+            # Breaks out of just the loop and not the function
+            break
+        # Sleep for a number of seconds before going to the next loop
+        sleep(poleRate)
+
+    # Finally we close the file.
+    stats_file.close()
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-t", "--tag", type=str,
+                        help="Tags the process and gives to the statistcs csv file.",
+                        default=None)
+    parser.add_argument("-o", "--outfile", type=str,
+                        help="Output file name for csv.",
+                        default=None)
+    parser.add_argument("-d", "--debug", action="store_true",
+                        help="Run with debugging info.",
+                        default=False)
+    parser.add_argument("-r", "--rate", type=float,
+                        help="Polling rate for process.", default=0.1)
+    parser.add_argument("-i", "--pid", type=int,
+                        help="Process id if not using watch.pid",
+                        default=None)
+    parser.add_argument('rest', nargs=argparse.REMAINDER)
+    args = parser.parse_args()
+
+    if args.debug:
+        logging.basicConfig(
+            format='%(asctime)s %(levelname)s ==> %(message)s', level=logging.INFO)
+    else:
+        logging.basicConfig(level=logging.FATAL)
+
+    # TODO:
+    # Cleaner way to check if we want to delete the watch pid
+    # or use a file instead of a default file or number
+    try:
+        os.remove('watch.pid')
+    except:
+        pass
+
+    nowtime = datetime.now().strftime("%m-%d-%Y-%H:%M:%S")
+
+    # Make out output stats csv name
+    if args.outfile is not None:
+        outfile = args.outfile
+    elif args.tag is not None:
+        outfile = f'{args.tag}_stats_{nowtime}.csv'
+    else:
+        outfile = f'stats_{nowtime}.csv'
+
+    logging.info(f'Saving csv to {outfile}')
+    logging.info(f'Using tag {args.tag}')
+    logging.info(f'Command: {args.rest}')
+
+    if args.rest:
+        pid = os.spawnlp(os.P_NOWAIT, args.rest[0], *args.rest)
+    else:
+        pid = args.pid
+
+    runner(pid=pid, outfile=outfile, poleRate=args.rate)
