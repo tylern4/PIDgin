@@ -8,6 +8,15 @@ import logging
 import sys
 import signal
 
+try:
+    import psutil
+except ImportError:
+    print("Error: Install psutil to get statistics!", file=sys.stderr)
+
+global system_procs
+system_procs = []
+
+
 # https://stackoverflow.com/questions/18499497/how-to-process-sigterm-signal-gracefully
 class GracefulKiller:
   kill_now = False
@@ -32,28 +41,31 @@ def read_cgroup_cpu(cpu_type='user'):
 
     return [int(c) for c in total_cpu.split(" ")[:-1]]
 
-def read_cpu_procstat():
 
-    #user    nice   system  idle      iowait irq   softirq  steal  guest  guest_nice
-    #cpu  74608   2520   24433   1117073   6176   4054  0        0      0      0
+def get_all_user_procs(username=None):
+    total_procs = psutil.pids()
+    user_procs = []
+    if username is None:
+        username = os.getlogin()
 
-    with open(f'/proc/stat', 'r') as cpus:
-        total_cpu = cpus.read()
-
-    total_cpu = total_cpu.split("\n")
-    print("#"*10)
-    for tc in total_cpu:
-        cpus = tc.split(" ")
-        if cpus[0]=="cpu":
+    for p in total_procs:
+        p = int(p)
+        if p in system_procs:
             continue
-        elif "cpu" in cpus[0]:
-            
-            print(cpus[1:])
-        
+
+        try:
+            user = psutil.Process(p).username()
+        except psutil.NoSuchProcess:
+            continue
+
+        if username == user:
+            user_procs.append(p)
+        else:
+            system_procs.append(p)
+
+    return user_procs
 
     
-
-
 
 def runner(outfile: str = "stats.csv", poleRate: float = 0.1):
     """
@@ -70,41 +82,60 @@ def runner(outfile: str = "stats.csv", poleRate: float = 0.1):
     sleep(2)
 
     stats_file = open(outfile, "w")
-    ftm_writer = "{},{},"
-
-    header = ["datetime", "mem"]
-    for i in range(num_cpus):
-        ftm_writer += "{},"
-        header.append(f"cpu{i}")
-
-    for i in range(num_cpus):
-        ftm_writer += "{},"
-        header.append(f"sys{i}")
     
-    ftm_writer = ftm_writer[:-1] 
-    ftm_writer += '\n'
-
+    ftm_writer = "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n"
+    header = ["datetime", "pid", "name", "num_threads", "cpu_percent", "cpu_t_user", "cpu_t_system", "cpu_num",
+        "mem_rss", "mem_vms", "mem_shared", "mem_percentage",
+        "num_fds", "read_count", "write_count", "read_chars", "write_chars"]
     stats_file.write(ftm_writer.format(*header))
-
 
     # Keep pulling data from the process while it's running
     killer = GracefulKiller()
     while not killer.kill_now:
-        read_cpu_procstat()
-        try:
-            read_cgroup_mem()
-            # # Add new line to the file with relevant data
-            stats_file.write(ftm_writer.format(
-                datetime.now().strftime("%m-%d-%Y %H:%M:%S.%f"),
-                read_cgroup_mem(),
-                *read_cgroup_cpu(cpu_type='user'),
-                *read_cgroup_cpu(cpu_type='sys')
-            ))
+        user_procs = get_all_user_procs()
+        for p in user_procs:
+            try:
+                proc = psutil.Process(p)
+                pData = proc.as_dict()
+                if 'io_counters' in pData:
+                    if pData['io_counters'] != None:
+                        read_count = pData['io_counters'].read_count 
+                        write_count = pData['io_counters'].write_count
+                        read_chars = pData['io_counters'].read_chars
+                        write_chars = pData['io_counters'].write_chars
+                    else:
+                        read_count = "nan" 
+                        write_count = "nan" 
+                        read_chars = "nan" 
+                        write_chars = "nan" 
 
-        except Exception as e:
-            logging.error(e)
-            # Breaks out of just the loop and not the function
-            break
+                # Add new line to the file with relevant data
+                stats_file.write(ftm_writer.format(
+                    datetime.now().strftime("%m-%d-%Y %H:%M:%S.%f"),
+                    p,
+                    pData['name'],
+                    pData['num_threads'],
+                    pData['cpu_percent'],
+                    pData['cpu_times'].user,
+                    pData['cpu_times'].system,
+                    pData['cpu_num'],
+                    pData['memory_info'].rss,
+                    pData['memory_info'].vms,
+                    pData['memory_info'].shared if 'shared' in pData['memory_info'] else "nan",
+                    pData['memory_percent'],
+                    pData['num_fds'],
+                    read_count,
+                    write_count,
+                    read_chars,
+                    write_chars
+                ))
+
+            except psutil.NoSuchProcess:
+                continue
+            except Exception as e:
+                print(e)
+                # Breaks out of just the loop and not the function
+
         # Sleep for a number of seconds before going to the next loop
         sleep(poleRate)
 

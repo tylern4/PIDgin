@@ -7,38 +7,68 @@ try:
     matplotlib.use('agg')  # noqa
     import pandas as pd
     import matplotlib.pyplot as plt
+    import numpy as np
 except ImportError:
     import sys
     print("Error: Install pandas and matplotlib to plot!", file=sys.stderr)
 
 
 def cpuPlot(df, tag):
-    df['cpu_percent'].plot()
-    df['cpu_percent'].rolling('60s').mean().plot(label="Average usage (1m)")
-    df['cpu_percent'].rolling('120s').mean().plot(label="Average usage (2m)")
+    fig, ax = plt.subplots()
+    cpucol = [c for c in df.columns if "cpu" in c]
+    syscol = [c for c in df.columns if "sys" in c]
+
+    # for c, s in zip(cpucol, syscol):
+    #     df[c] = df[c] / (df[c] + df[s])
+
+    df['total_cpu'] = np.zeros(shape=df.shape[0])
+    df['total_sys'] = np.zeros(shape=df.shape[0])
+    for c, s in zip(cpucol, syscol):
+        df['total_cpu'] += df[c]
+        df['total_sys'] += df[s]
+
+    df['total_cpu'] = df['total_cpu'].rolling(10).apply(lambda x: x.iloc[-1] - x.iloc[0])
+    df['total_cpu'].plot()
+
+    df['total_sys'] = df['total_sys'].rolling(10).apply(lambda x: x.iloc[-1] - x.iloc[0])
+    df['total_sys'].plot()
+
+
+    for c, s in zip(cpucol, syscol):
+        df[c] = df[c].rolling(10).apply(lambda x: x.iloc[-1] - x.iloc[0])
+        df[s] = df[s].rolling(10).apply(lambda x: x.iloc[-1] - x.iloc[0])
+
+
+    ax.twinx()
+    for c, s in zip(cpucol, syscol):
+        df[c].plot(alpha=0.1, color='k')
+
+
+    # df['cpu_percent'].rolling('60s').mean().plot(label="Average usage (1m)")
+    # df['cpu_percent'].rolling('120s').mean().plot(label="Average usage (2m)")
     plt.title(f"cpu percentage {tag}")
     plt.ylabel("cpu percentage [%]")
     plt.xlabel("time")
-    lgn = plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    # lgn = plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
 
     if tag is None:
         plt.savefig("cpu.png")
     else:
         plt.savefig(f"{tag}_cpu.png",
-                    bbox_extra_artists=[lgn],
+                    # bbox_extra_artists=[lgn],
                     bbox_inches='tight')
     plt.clf()
 
 
 def memPlot(df, tag):
-    df['mem_rss'] = df['mem_rss'] * 1e-9
-    df['mem_rss'].plot(label="Raw memory usage")
-    df['mem_rss'].rolling('60s').mean().plot(
+    df['mem'] = (df['mem'] - df['mem'].iloc[0]) * 1e-9
+    df['mem'].plot(label="Raw memory usage")
+    df['mem'].rolling('60s').mean().plot(
         label="Average usage (1m)")
-    df['mem_rss'].rolling('120s').mean().plot(
-        label="Average usage (2m)")
+    # df['mem'].rolling('120s').mean().plot(
+    #     label="Average usage (2m)")
     plt.title(f"memory usage {tag}")
-    plt.ylabel("memory usage [MB]")
+    plt.ylabel("memory usage [GB]")
     plt.xlabel("time")
     lgn = plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
 
