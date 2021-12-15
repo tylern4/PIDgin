@@ -120,3 +120,4 @@ watch.pid
 cpu.png
 mem.png
 *.csv
+.vscode/settings.json
