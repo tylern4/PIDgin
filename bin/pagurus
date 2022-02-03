@@ -48,11 +48,12 @@ def get_all_user_procs(username=None) -> List[int]:
         # In case the process stoped between
         try:
             user = psutil.Process(p).username()
+            name = psutil.Process(p).name()
         except psutil.NoSuchProcess:
             continue
 
         # Add user processes to list to return
-        if username == user and p != os.getpid():
+        if username == user and p != os.getpid() and name != 'slurm_script':
             user_procs.append(p)
 
     return user_procs
@@ -84,8 +85,7 @@ def get_cputimes(pData):
     if 'cpu_times' in pData and pData['cpu_times'] is not None:
         user = pData['cpu_times'].user
         system = pData['cpu_times'].system
-        children_user = pData['cpu_times'].children_user
-        children_system = pData['cpu_times'].children_system
+
         try:
             iowait = pData['cpu_times'].iowait
             cpu_num = pData['cpu_num']
@@ -93,15 +93,19 @@ def get_cputimes(pData):
             iowait = "nan"
             cpu_num = "nan"
 
+        try:
+            idle = pData['cpu_times'].idle
+        except:
+            idle = "nan"
+
     else:
         user = "nan"
         system = "nan"
-        children_user = "nan"
-        children_system = "nan"
         iowait = "nan"
         cpu_num = "nan"
+        idle = "nan"
 
-    return cpu_num, user, system, children_user, children_system, iowait
+    return cpu_num, user, system, iowait, idle
 
 
 def cmd_data(pData):
@@ -131,9 +135,9 @@ def runner(outfile: str = "stats.csv", pole_rate: float = 0.1, username: str = "
 
     stats_file = open(outfile, "w")
 
-    header = ["datetime", "pid", "name", "num_threads", "cpu_percent", "cpu_num",
-              "cpu_time_user", "cpu_time_system", "cput_children_user", "cput_children_system",
-              "iowait", "mem_rss", "mem_vms", 'memory_percent',
+    header = ["@timestamp", "pid", "name", "num_threads", "cpu_num",
+              "cpu_user", "cpu_system", "iowait", "idle",
+              "mem_rss", "mem_vms", 'memory_percent',
               "num_fds", "read_count", "write_count", "read_chars",
               "write_chars", "cmdline", "current_dir"]
     # Make formater based on number of metrics in header
@@ -152,15 +156,12 @@ def runner(outfile: str = "stats.csv", pole_rate: float = 0.1, username: str = "
                 proc = psutil.Process(proc_num)
                 pData = proc.as_dict()
 
-                cpu_percent = pData['cpu_percent']
-
                 # Add new line to the file with relevant data
                 stats_file.write(ftm_writer.format(
                     datetime.now().strftime("%m-%d-%Y %H:%M:%S.%f"),
                     proc_num,
                     pData['name'],
                     pData['num_threads'],
-                    cpu_percent,
                     *get_cputimes(pData),
                     *get_meminfo(pData),
                     pData['memory_percent'],
