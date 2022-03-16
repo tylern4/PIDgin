@@ -8,6 +8,7 @@ import logging
 import sys
 import signal
 from typing import List
+from pathlib import Path
 
 # Exit if psutil is not installed
 try:
@@ -24,11 +25,18 @@ class GracefulKiller:
     """
     kill_now = False
 
-    def __init__(self):
+    def __init__(self, old_prefix=None, new_prefix=None, filename=None):
         signal.signal(signal.SIGINT, self.exit_gracefully)
         signal.signal(signal.SIGTERM, self.exit_gracefully)
+        self.old_prefix = old_prefix
+        self.new_prefix = new_prefix
+        self.filename = filename
 
     def exit_gracefully(self, *args):
+        if self.filename != None:
+            logging.debug(f"Moving {self.old_prefix}/{self.filename} to {self.new_prefix}/{self.filename}\n")
+            Path(f"{self.old_prefix}/{self.filename}").rename(f"{self.new_prefix}/{self.filename}")
+
         logging.info("Killing Process\n\n")
         self.kill_now = True
 
@@ -120,7 +128,9 @@ def cmd_data(pData):
     return "|".join(cmd)
 
 
-def runner(outfile: str = "stats.csv", pole_rate: float = 0.1, username: str = "", write_header: bool = True):
+def runner(
+        path: str = ".", filename: str = "stats.csv", pole_rate: float = 0.1, username: str = "", write_header: bool = True,
+        move: bool = False):
     """
     Runs while your executable is still running and logs info
     about running process to a csv file.
@@ -133,10 +143,20 @@ def runner(outfile: str = "stats.csv", pole_rate: float = 0.1, username: str = "
 
     sleep(1)
 
+    if move:
+        killer = GracefulKiller(old_prefix=f"{path}/running", new_prefix=f"{path}/done", filename=filename)
+        Path(f"{path}/running").mkdir(exist_ok=True)
+        Path(f"{path}/done").mkdir(exist_ok=True)
+        outfile = f"{path}/running/{filename}"
+    else:
+        killer = GracefulKiller()
+        Path(f"{path}").mkdir(exist_ok=True)
+        outfile = f"{path}/{filename}"
+
     stats_file = open(outfile, "w")
 
     header = ["@timestamp", "pid", "name", "num_threads", "cpu_num",
-              "cpu_user", "cpu_system", "iowait", "idle",
+              "cpu_user", "cpu_system", "cpu_iowait", "idle",
               "mem_rss", "mem_vms", 'memory_percent',
               "num_fds", "read_count", "write_count", "read_chars",
               "write_chars", "cmdline", "current_dir"]
@@ -147,8 +167,8 @@ def runner(outfile: str = "stats.csv", pole_rate: float = 0.1, username: str = "
     if write_header:
         stats_file.write(ftm_writer.format(*header))
         stats_file.flush()
+
     # Keep pulling data from the process while it's running
-    killer = GracefulKiller()
     while not killer.kill_now:
         user_procs = get_all_user_procs(username=username)
         for proc_num in user_procs:
@@ -192,8 +212,8 @@ if __name__ == '__main__':
                         help="Tags the process and gives to the statistcs csv file.",
                         default="stats")
     parser.add_argument("-o", "--outfile", type=str,
-                        help="Full path to output file name for csv.",
-                        default=None)
+                        help="File name for csv.",
+                        default="stats.csv")
     parser.add_argument("-p", "--path", type=str,
                         help="Path to put csv file.",
                         default=".")
@@ -206,29 +226,20 @@ if __name__ == '__main__':
                         help="Username to get stats for.", default=None)
     parser.add_argument("-noh", "--no-header",
                         help="Turn off writting the header.", default=True, action='store_false')
+    parser.add_argument("-mv", "--move",
+                        help="Moves file from 'running' to 'complete'", default=False, action='store_true')
 
     args = parser.parse_args()
 
     # Turn on logging if in debug mode
     if args.debug:
         logging.basicConfig(
-            format='%(asctime)s %(levelname)s ==> %(message)s', level=logging.INFO)
+            format='%(asctime)s %(levelname)s ==> %(message)s', level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.FATAL)
 
-    # Get current time
-    nowtime = datetime.now().strftime("%m-%d-%Y-%H.%M.%S")
-
-    # Make out output stats csv name
-    if args.outfile is not None:
-        outfile = args.outfile
-    elif args.tag is not None:
-        outfile = f'{args.path}/{args.tag}_{nowtime}.csv'
-    else:
-        outfile = f'{args.path}/stats_{nowtime}.csv'
-
-    logging.info(f'Saving csv to {outfile}')
+    logging.debug("Running in debug mode")
 
     # Start the recorder
-    runner(outfile=outfile, pole_rate=args.rate,
-           username=args.user, write_header=args.no_header)
+    runner(path=args.path, filename=args.outfile, pole_rate=args.rate,
+           username=args.user, write_header=args.no_header, move=args.move)
