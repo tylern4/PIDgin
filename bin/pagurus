@@ -49,7 +49,10 @@ def get_all_user_procs(username=None) -> List[int]:
 
     # If username is not given get it from the os
     if username is None:
-        username = os.getlogin()
+        try:
+            username = os.getlogin()
+        except OSError:
+            user = "runner"
 
     total_procs = [int(p) for p in total_procs]
     for p in total_procs:

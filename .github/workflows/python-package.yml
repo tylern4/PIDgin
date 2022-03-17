@@ -43,3 +43,4 @@ jobs:
           export PID=$!
           sleep 10
           kill $PID
+          ls -la
