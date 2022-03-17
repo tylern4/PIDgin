@@ -96,6 +96,12 @@ def get_cputimes(pData):
     if 'cpu_times' in pData and pData['cpu_times'] is not None:
         user = pData['cpu_times'].user
         system = pData['cpu_times'].system
+        try:
+            children_user = pData['cpu_times'].children_user
+            children_system = pData['cpu_times'].children_system
+        except:
+            children_system = "nan"
+            children_user = "nan"
 
         try:
             iowait = pData['cpu_times'].iowait
@@ -115,8 +121,10 @@ def get_cputimes(pData):
         iowait = "nan"
         cpu_num = "nan"
         idle = "nan"
+        children_system = "nan"
+        children_user = "nan"
 
-    return cpu_num, user, system, iowait, idle
+    return cpu_num, user, system, iowait, children_system, children_user, idle
 
 
 def cmd_data(pData):
@@ -159,7 +167,8 @@ def runner(
     stats_file = open(outfile, "w")
 
     header = ["@timestamp", "pid", "name", "num_threads", "cpu_num",
-              "cpu_user", "cpu_system", "cpu_iowait", "idle",
+              "cpu_user", "cpu_system", "cpu_iowait",
+              "cpu_children_system", "cpu_children_user", "idle",
               "mem_rss", "mem_vms", 'memory_percent',
               "num_fds", "read_count", "write_count", "read_chars",
               "write_chars", "cmdline", "current_dir"]
