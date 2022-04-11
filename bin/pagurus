@@ -34,8 +34,11 @@ class GracefulKiller:
 
     def exit_gracefully(self, *args):
         if self.filename != None:
-            logging.debug(f"Moving {self.old_prefix}/{self.filename} to {self.new_prefix}/{self.filename}\n")
-            Path(f"{self.old_prefix}/{self.filename}").rename(f"{self.new_prefix}/{self.filename}")
+            logging.debug(
+                f"Moving {self.old_prefix}/{self.filename} to {self.new_prefix}/{self.filename}\n")
+
+            Path(f"{self.old_prefix}/{self.filename}")\
+                .rename(f"{self.new_prefix}/{self.filename}")
 
         logging.info("Killing Process\n\n")
         self.kill_now = True
@@ -140,7 +143,9 @@ def cmd_data(pData):
 
 
 def runner(
-        path: str = ".", filename: str = "stats.csv", pole_rate: float = 0.1, username: str = "", write_header: bool = True,
+        path: str = ".", filename: str = "stats.csv",
+        pole_rate: float = 0.1, username: str = "",
+        write_header: bool = True,
         move: bool = False):
     """
     Runs while your executable is still running and logs info
@@ -155,7 +160,10 @@ def runner(
     sleep(1)
 
     if move:
-        killer = GracefulKiller(old_prefix=f"{path}/running", new_prefix=f"{path}/done", filename=filename)
+        killer = GracefulKiller(old_prefix=f"{path}/running",
+                                new_prefix=f"{path}/done",
+                                filename=filename)
+
         Path(f"{path}/running").mkdir(exist_ok=True)
         Path(f"{path}/done").mkdir(exist_ok=True)
         outfile = f"{path}/running/{filename}"
