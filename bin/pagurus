@@ -28,24 +28,26 @@ class GracefulKiller:
 
     def __init__(self, old_prefix=None, new_prefix=None, filename=None):
         # Catch for all signals and exit gracefully
-        for sig in set(signal.Signals):
+        good_sigs = set(signal.Signals) - {signal.SIGKILL, signal.SIGSTOP}
+        for sig in good_sigs:
             signal.signal(sig, self.exit_gracefully)
 
+        self.filename = filename
         # Use pathlib features
         self.old_prefix = Path(f"{old_prefix}")
         self.running_file = self.old_prefix / f"{self.filename}"
 
         self.new_prefix = new_prefix
-        self.filename = filename
 
-    def exit_gracefully(self, signum, frame):
+    def exit_gracefully(self, sig, frame):
         if self.filename != None:
-            self.running_file.rename(f"{self.new_prefix}/{self.filename}")
             logging.info(
                 f"Moving {self.running_file} to {self.new_prefix}/{self.filename}")
-            logging.info(f"Killed with {signum}")
+            self.running_file.rename(f"{self.new_prefix}/{self.filename}")
 
-        logging.info("Killing Process\n\n")
+            logging.info(f"Killed with {signal.Signals(sig).name}")
+
+        logging.info("Killing Process")
         self.kill_now = True
 
 
@@ -165,18 +167,20 @@ def runner(
 
     sleep(1)
 
+    out_dir = Path(f"{path}")
+    out_dir.mkdir(exist_ok=True)
+
     if move:
         killer = GracefulKiller(old_prefix=f"{path}/running",
                                 new_prefix=f"{path}/done",
                                 filename=filename)
-
-        Path(f"{path}/running").mkdir(exist_ok=True)
-        Path(f"{path}/done").mkdir(exist_ok=True)
-        outfile = f"{path}/running/{filename}"
+        running = out_dir/"running"
+        running.mkdir(exist_ok=True)
+        (out_dir/"done").mkdir(exist_ok=True)
+        outfile = running/f"{filename}"
     else:
         killer = GracefulKiller()
-        Path(f"{path}").mkdir(exist_ok=True)
-        outfile = f"{path}/{filename}"
+        outfile = out_dir/f"{filename}"
 
     stats_file = open(outfile, "w")
 
@@ -218,10 +222,15 @@ def runner(
                 ))
 
             except psutil.NoSuchProcess as e:
-                logging.error(f'Error: {e}')
-                continue
+                # Comes when a process is killed between getting the number and getting the data
+                pass
+            except AttributeError as e:
+                pass
+            except TypeError as e:
+                pass
             except Exception as e:
-                logging.error(f'Error: {e}')
+                logging.error(f'Error ({type(e).__name__}): {e}')
+                pass
                 # Breaks out of just the loop and not the function
 
         # Write and Sleep for a number of seconds before going to the next loop
