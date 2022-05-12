@@ -41,14 +41,14 @@ class GracefulKiller:
 
     def exit_gracefully(self, sig, frame):
         if self.filename != None:
+            self.running_file.rename(f"{self.new_prefix}/{self.filename}")
+            logging.info(f"Killed with {signal.Signals(sig).name}")
             logging.info(
                 f"Moving {self.running_file} to {self.new_prefix}/{self.filename}")
-            self.running_file.rename(f"{self.new_prefix}/{self.filename}")
-
-            logging.info(f"Killed with {signal.Signals(sig).name}")
 
         logging.info("Killing Process")
         self.kill_now = True
+        sys.exit(0)
 
 
 def get_all_user_procs(username=None) -> List[int]:
