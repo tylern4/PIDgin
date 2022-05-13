@@ -114,7 +114,7 @@ dmypy.json
 .pyre/
 
 
-# For PIDgin
+# For pagurus
 stats.csv
 watch.pid
 cpu.png
