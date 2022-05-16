@@ -137,7 +137,7 @@ def get_cputimes(pData):
     return cpu_num, user, system, iowait, children_system, children_user, idle
 
 
-@lru_cache
+# @lru_cache
 def cmd_data(pData):
     """
     Gets data from the command line arguments and serilaizes it for csv
