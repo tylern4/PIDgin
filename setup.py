@@ -22,7 +22,7 @@ setup(
     url="https://github.com/tylern4/pagurus",
     author="Nick Tyler",
     author_email="tylern@lbl.gov",
-    version=version,
+    version='1.0.1',
     scripts=glob('bin/*'),
     install_requires=[
         'psutil==5.8.0',
