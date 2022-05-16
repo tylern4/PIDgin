@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from ensurepip import version
 from pathlib import Path
 import os
 from setuptools import setup
@@ -9,8 +10,9 @@ _dir = Path(__file__).resolve().parent
 with open(f"{_dir}/README.md") as f:
     long_desc = f.read()
 
-
-print(glob('bin/*'))
+with open(f"{_dir}/VERSION") as f:
+    version = f.read()
+    __version__ = version
 
 setup(
     name="pagurus",
@@ -20,7 +22,7 @@ setup(
     url="https://github.com/tylern4/pagurus",
     author="Nick Tyler",
     author_email="tylern@lbl.gov",
-    version='1.0',
+    version=version,
     scripts=glob('bin/*'),
     install_requires=[
         'psutil==5.8.0',
