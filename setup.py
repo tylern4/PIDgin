@@ -10,9 +10,9 @@ _dir = Path(__file__).resolve().parent
 with open(f"{_dir}/README.md") as f:
     long_desc = f.read()
 
-with open(f"{_dir}/VERSION") as f:
-    version = f.read()
-    __version__ = version
+#with open(f"{_dir}/VERSION") as f:
+#    version = f.read()
+#    __version__ = version
 
 setup(
     name="pagurus",
