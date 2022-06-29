@@ -2,6 +2,13 @@
 
 Used for getting the information from a running job based on its pid using psutil.
 
+## Install
+Availible on [PyPi](https://pypi.org/project/pagurus/) and easily installed in your enviroment.
+
+```
+pip install pagurus
+```
+
 ### Options
 
 ```
