@@ -36,9 +36,18 @@ export PID=$!
 # Sleep for a few seconds to let everything start running
 sleep 10 
 
+###########################
 
 # Run your desired program as normal
 ./a.out
+
+# Works with containers
+shifter --image=tylern4/memoryhog:latest alloc 2
+
+# and with wrapper scripts
+shifter --image=jfroula/aligner-bbmap:2.0.2 bbmap.sh Xmx12g in=sample.fastq.bz2 ref=sample.fasta out=test.sam
+
+###########################
 
 # Kill the pagurus process
 kill $PID
@@ -46,6 +55,10 @@ kill $PID
 # Sleep for a few seconds to let results finish writing
 sleep 10
 ```
+
+### Plotting results example
+
+There is an [example notebook](hermit_notebook.ipynb) which will shows how to get memory usage and cpu usage from the output files.
 
 
 <!-- ### Plotting results
