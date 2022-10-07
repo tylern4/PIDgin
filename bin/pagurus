@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
-from functools import lru_cache
+import bz2
+import gzip
 
 from time import sleep
 from datetime import datetime
@@ -8,7 +9,7 @@ import os
 import logging
 import sys
 import signal
-from typing import List
+from typing import Dict, List
 from pathlib import Path
 
 # Exit if psutil is not installed
@@ -17,6 +18,37 @@ try:
 except ImportError:
     print("Error: Install psutil to get statistics!", file=sys.stderr)
     exit(0)
+
+
+class FileWriter:
+    compressed = False
+
+    def __init__(self, outfile, _gzip: bool = False, _bzip2: bool = False) -> None:
+        extenstion = outfile.name.split('.')[-1]
+        if _gzip or extenstion == 'gz':
+            outfile = outfile if extenstion == 'gz' else f'{outfile}.gz'
+            self.compressed = True
+            logging.info(f"Writing gzip pagurus gzip file {outfile}")
+            self.output_file = gzip.open(outfile, 'wt')
+        elif _bzip2 or extenstion == 'bz2':
+            outfile = outfile if extenstion == 'bz2' else f'{outfile}.bz2'
+            self.compressed = True
+            logging.info(f"Writing bz2 pagurus bz2 file {outfile}")
+            self.output_file = bz2.open(outfile, 'wt')
+        else:
+            logging.info(f"Writing pagurus file {outfile}")
+            self.output_file = open(outfile, "w")
+        self.outfile = outfile
+
+    def write(self, data):
+        self.output_file.write(data)
+
+    def flush(self):
+        self.output_file.flush()
+
+    def close(self):
+        logging.info(f"Closing {self.outfile}")
+        self.output_file.close()
 
 
 class GracefulKiller:
@@ -80,7 +112,7 @@ def get_all_user_procs(username=None) -> List[int]:
     return user_procs
 
 
-def get_iocounters(pData):
+def get_iocounters(pData: Dict):
     if 'io_counters' in pData and pData['io_counters'] is not None:
         read_count = pData['io_counters'].read_count
         write_count = pData['io_counters'].write_count
@@ -182,7 +214,7 @@ def runner(
         killer = GracefulKiller()
         outfile = out_dir/f"{filename}"
 
-    stats_file = open(outfile, "w")
+    stats_file = FileWriter(outfile=outfile)
 
     header = ["@timestamp", "pid", "ppid", "name", "num_threads", "cpu_num",
               "cpu_user", "cpu_system", "cpu_iowait",
