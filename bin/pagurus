@@ -2,6 +2,7 @@
 import argparse
 import bz2
 import gzip
+from math import ceil
 
 from time import sleep
 from datetime import datetime
@@ -23,25 +24,20 @@ except ImportError:
 class FileWriter:
     compressed = False
 
-    def __init__(self, outfile, _gzip: bool = False, _bzip2: bool = False) -> None:
-        extenstion = outfile.name.split('.')[-1]
-        if _gzip or extenstion == 'gz':
-            outfile = outfile if extenstion == 'gz' else f'{outfile}.gz'
-            self.compressed = True
-            logging.info(f"Writing gzip pagurus gzip file {outfile}")
-            self.output_file = gzip.open(outfile, 'wt')
-        elif _bzip2 or extenstion == 'bz2':
-            outfile = outfile if extenstion == 'bz2' else f'{outfile}.bz2'
-            self.compressed = True
-            logging.info(f"Writing bz2 pagurus bz2 file {outfile}")
-            self.output_file = bz2.open(outfile, 'wt')
-        else:
-            logging.info(f"Writing pagurus file {outfile}")
-            self.output_file = open(outfile, "w")
-        self.outfile = outfile
+    def __init__(self, outfile, header: List[str] = [""], write_header: bool = True) -> None:
+        self.header: List[str] = header
+        self.number: int = 0
+        self.write_header: bool = write_header
 
-    def write(self, data):
-        self.output_file.write(data)
+        # Make formater based on number of metrics in header
+        fmt = ",".join(["{}" for _ in range(len(header))])
+        self.fmt_writer = fmt + "\n"
+
+        self.outfile: Path = outfile
+        self.next_file()
+
+    def write(self, *args):
+        self.output_file.write(self.fmt_writer.format(*args))
 
     def flush(self):
         self.output_file.flush()
@@ -49,6 +45,42 @@ class FileWriter:
     def close(self):
         logging.info(f"Closing {self.outfile}")
         self.output_file.close()
+
+    def _open_file(self):
+        extenstion = self.outfile.name.split('.')[-1]
+        if extenstion == 'gz':
+            self.compressed = True
+            logging.info(f"Writing gzip pagurus gzip file {self.outfile}")
+            self.output_file = gzip.open(self.outfile, 'wt')
+        elif extenstion == 'bz2':
+            self.compressed = True
+            logging.info(f"Writing bz2 pagurus bz2 file {self.outfile}")
+            self.output_file = bz2.open(self.outfile, 'wt')
+        else:
+            logging.info(f"Writing pagurus file {self.outfile}")
+            self.output_file = open(self.outfile, "w")
+
+    def _write_header(self):
+        self.output_file.write(self.fmt_writer.format(*self.header))
+        self.output_file.flush()
+
+    def _renamer(self):
+        pass
+
+    def next_file(self):
+        if self.number != 0:
+            self.close()
+        # Split name into it's parts
+        name_split = self.outfile.as_posix().split('.')
+        l = len(name_split)
+        # Add in the file number into the name
+        new_outfile_name = f"{name_split[0]}.{self.number}.{'.'.join(name_split[(l-1):])}"
+        # Replace the path
+        self.outfile = Path(new_outfile_name)
+        self._open_file()
+        if self.write_header:
+            self._write_header()
+        self.number += 1
 
 
 class GracefulKiller:
@@ -186,7 +218,7 @@ def runner(
         path: str = ".", filename: str = "stats.csv",
         pole_rate: float = 0.1, username: str = "",
         write_header: bool = True,
-        move: bool = False):
+        move: bool = False, rolling: int = 0):
     """
     Runs while your executable is still running and logs info
     about running process to a csv file.
@@ -196,6 +228,10 @@ def runner(
         poleRate (float, optional): Time to sleep before getting new data. Defaults to 0.1.
         username (str, optional): User name to look for when getting statistics.
     """
+
+    # Sets moving files if rolling is true
+    if move and rolling > 0:
+        move = False
 
     sleep(1)
 
@@ -214,22 +250,16 @@ def runner(
         killer = GracefulKiller()
         outfile = out_dir/f"{filename}"
 
-    stats_file = FileWriter(outfile=outfile)
-
     header = ["@timestamp", "pid", "ppid", "name", "num_threads", "cpu_num",
               "cpu_user", "cpu_system", "cpu_iowait",
               "cpu_children_system", "cpu_children_user", "idle",
               "mem_rss", "mem_vms", 'memory_percent',
               "num_fds", "read_count", "write_count", "read_chars",
               "write_chars", "cmdline", "current_dir"]
-    # Make formater based on number of metrics in header
-    ftm_writer = ",".join(["{}" for _ in range(len(header))])
-    ftm_writer = ftm_writer + "\n"
 
-    if write_header:
-        stats_file.write(ftm_writer.format(*header))
-        stats_file.flush()
-
+    stats_file = FileWriter(
+        outfile=outfile, header=header, write_header=write_header)
+    itteration = 0
     # Keep pulling data from the process while it's running
     while not killer.kill_now:
         user_procs = get_all_user_procs(username=username)
@@ -239,20 +269,19 @@ def runner(
                 pData = proc.as_dict()
 
                 # Add new line to the file with relevant data
-                stats_file.write(ftm_writer.format(
-                    datetime.now().strftime("%m-%d-%Y %H:%M:%S.%f"),
-                    proc_num,
-                    pData['ppid'],
-                    pData['name'],
-                    pData['num_threads'],
-                    *get_cputimes(pData),
-                    *get_meminfo(pData),
-                    pData['memory_percent'],
-                    pData['num_fds'],
-                    *get_iocounters(pData),
-                    cmd_data(pData),
-                    pData['cwd']
-                ))
+                stats_file.write(datetime.now().strftime("%m-%d-%Y %H:%M:%S.%f"),
+                                 proc_num,
+                                 pData['ppid'],
+                                 pData['name'],
+                                 pData['num_threads'],
+                                 *get_cputimes(pData),
+                                 *get_meminfo(pData),
+                                 pData['memory_percent'],
+                                 pData['num_fds'],
+                                 *get_iocounters(pData),
+                                 cmd_data(pData),
+                                 pData['cwd']
+                                 )
 
             except psutil.NoSuchProcess as e:
                 # Comes when a process is killed between getting the number and getting the data
@@ -270,15 +299,17 @@ def runner(
         stats_file.flush()
         sleep(pole_rate)
 
+        if rolling > 0:
+            itteration += 1
+            if itteration % ceil(rolling/pole_rate) == 0:
+                stats_file.next_file()
+
     # Finally we close the file.
     stats_file.close()
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("-t", "--tag", type=str,
-                        help="Tags the process and gives to the statistcs csv file.",
-                        default="stats")
     parser.add_argument("-o", "--outfile", type=str,
                         help="File name for csv.",
                         default="stats.csv")
@@ -295,7 +326,9 @@ if __name__ == '__main__':
     parser.add_argument("-noh", "--no-header",
                         help="Turn off writting the header.", default=True, action='store_false')
     parser.add_argument("-mv", "--move",
-                        help="Moves file from 'running' to 'complete'", default=False, action='store_true')
+                        help="Moves file from 'running' to 'done' directories", default=False, action='store_true')
+    parser.add_argument("-l", "--rolling", type=int, help="Time to roll file over to number to file name in ~minutes.",
+                        default=0)
 
     args = parser.parse_args()
 
@@ -308,6 +341,10 @@ if __name__ == '__main__':
 
     logging.debug("Running in debug mode")
 
+    # 10 gives ~a minute for swapping files
+    # so rolling*10 should be okay for minutes (on average)
+    rolling = args.rolling * 10
+
     # Start the recorder
     runner(path=args.path, filename=args.outfile, pole_rate=args.rate,
-           username=args.user, write_header=args.no_header, move=args.move)
+           username=args.user, write_header=args.no_header, move=args.move, rolling=rolling)
