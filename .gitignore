@@ -121,3 +121,5 @@ cpu.png
 mem.png
 *.csv
 .vscode/settings.json
+running
+done

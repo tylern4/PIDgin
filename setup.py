@@ -10,7 +10,7 @@ _dir = Path(__file__).resolve().parent
 with open(f"{_dir}/README.md") as f:
     long_desc = f.read()
 
-#with open(f"{_dir}/VERSION") as f:
+# with open(f"{_dir}/VERSION") as f:
 #    version = f.read()
 #    __version__ = version
 
@@ -22,7 +22,7 @@ setup(
     url="https://github.com/tylern4/pagurus",
     author="Nick Tyler",
     author_email="tylern@lbl.gov",
-    version='1.0.2',
+    version='1.1',
     scripts=glob('bin/*'),
     install_requires=[
         'psutil==5.8.0',
