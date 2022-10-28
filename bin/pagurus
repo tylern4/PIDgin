@@ -41,8 +41,9 @@ class FileWriter:
         self.write_header: bool = write_header
         self.rolling: bool = rolling
 
-        # Make formater based on number of metrics in header
+        # Create an appropriate formatting function
         if jsonout:
+            # Formatter function that outputs a dictionary in JSON
             if header == [""]:
                 raise Exception("header cannot be blank for JSON output")
             if write_header:
@@ -50,6 +51,7 @@ class FileWriter:
                 self.write_header = False
             self.fmt_func = lambda *args : "{}\n".format(json.dumps(dict(zip(header,args))))
         else:
+            # Make formatter function based on number of metrics in header
             fmt = ",".join(["{}" for _ in range(len(header))])
             fmt_writer = fmt + "\n"
             self.fmt_func = lambda *args : fmt_writer.format(*args)
