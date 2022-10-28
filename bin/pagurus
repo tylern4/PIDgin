@@ -318,7 +318,7 @@ def runner(
                 pass
             except Exception as e:
                 logging.error(f'Error ({type(e).__name__}): {e}')
-                raise(e)
+                pass
                 # Breaks out of just the loop and not the function
 
         # Write and Sleep for a number of seconds before going to the next loop
