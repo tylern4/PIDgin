@@ -37,6 +37,12 @@ class FileWriter:
             'bz2': 'csv.bz2',
             'csv': 'csv'
         }
+        # If environment variables are specified they need to be available, otherwise bail
+        if len(env) > 0:
+            for ev in env:
+                if ev not in os.environ:
+                    raise KeyError("Environment variable {} not found".format(ev))
+
         self.header: List[str] = header + env
         self.number: int = 0
         self.write_header: bool = write_header
@@ -380,12 +386,6 @@ if __name__ == '__main__':
         logging.basicConfig(level=logging.FATAL)
 
     logging.debug("Running in debug mode")
-
-    # If environment variables are specified they need to be available, otherwise bail
-    if len(args.envvar) > 0:
-        for ev in args.envvar:
-            if ev not in os.environ:
-                raise Exception("Environment variable {} not found".format(ev))
 
     # 10 gives ~a minute for swapping files
     # so rolling*10 should be okay for minutes (on average)
