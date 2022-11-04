@@ -10,6 +10,8 @@ import os
 import logging
 import sys
 import signal
+import json
+
 from typing import Dict, List
 from pathlib import Path
 
@@ -27,26 +29,47 @@ class FileWriter:
     def __init__(self, outfile,
                  header: List[str] = [""],
                  write_header: bool = True,
-                 rolling: bool = False) -> None:
+                 rolling: bool = False,
+                 jsonout: bool = False,
+                 env: Dict = {}) -> None:
         self.extensions = {
             'gz': 'csv.gz',
             'bz2': 'csv.bz2',
             'csv': 'csv'
         }
+
         self.header: List[str] = header
         self.number: int = 0
         self.write_header: bool = write_header
         self.rolling: bool = rolling
+        self.env: Dict = env
 
-        # Make formater based on number of metrics in header
-        fmt = ",".join(["{}" for _ in range(len(header))])
-        self.fmt_writer = fmt + "\n"
+        # Create an appropriate formatting function
+        if jsonout:
+            # Formatter function that outputs a dictionary in JSON
+            if header == [""]:
+                raise Exception("header cannot be blank for JSON output")
+            if write_header:
+                logging.debug("forcing write_header to false due to --json flag")
+                self.write_header = False
 
+            # Adds envs to the end of the dict for fmt_writer
+            def fmt(*args):
+                temp = dict(zip(self.header, args))
+                temp.update(env)
+                return "{}\n".format(json.dumps(temp))
+            self.fmt_func = lambda *args: fmt(*args)
+
+        else:
+            # Make formatter function based on number of metrics in header
+            fmt = ",".join(["{}" for _ in range(len(self.header))])
+            fmt_writer = fmt + "\n"
+            self.fmt_func = lambda *args: fmt_writer.format(*args)
         self.outfile: Path = outfile
         self.next_file()
 
     def write(self, *args):
-        self.output_file.write(self.fmt_writer.format(*args))
+        self.output_file.write(self.fmt_func(*args))
 
     def flush(self):
         self.output_file.flush()
@@ -70,7 +93,7 @@ class FileWriter:
             self.output_file = open(self.outfile, "w")
 
     def _write_header(self):
-        self.output_file.write(self.fmt_writer.format(*self.header))
+        self.output_file.write(self.fmt_func(*self.header))
         self.output_file.flush()
 
     def _renamer(self):
@@ -231,10 +254,12 @@ def runner(
         path: str = ".", filename: str = "stats.csv",
         pole_rate: float = 0.1, username: str = "",
         write_header: bool = True,
-        move: bool = False, rolling: int = 0):
+        move: bool = False, rolling: int = 0,
+        json: bool = False, env: Dict = {}):
     """
     Runs while your executable is still running and logs info
-    about running process to a csv file.
+    about running process to the output file, defaulting to CSV format
+    unless the --json flag is set
 
     Args:
         outfile (str, optional): output filename. Defaults to "stats.csv".
@@ -270,8 +295,10 @@ def runner(
               "num_fds", "read_count", "write_count", "read_chars",
               "write_chars", "cmdline", "current_dir"]
 
-    stats_file = FileWriter(
-        outfile=outfile, header=header, write_header=write_header, rolling=True if rolling > 0 else False)
+    stats_file = FileWriter(outfile=outfile, header=header,
+                            write_header=write_header,
+                            rolling=True if rolling > 0 else False,
+                            jsonout=json, env=env)
     itteration = 0
     # Keep pulling data from the process while it's running
     while not killer.kill_now:
@@ -282,26 +309,29 @@ def runner(
                 pData = proc.as_dict()
 
                 # Add new line to the file with relevant data
-                stats_file.write(datetime.now().strftime("%m-%d-%Y %H:%M:%S.%f"),
-                                 proc_num,
-                                 pData['ppid'],
-                                 pData['name'],
-                                 pData['num_threads'],
-                                 *get_cputimes(pData),
-                                 *get_meminfo(pData),
-                                 pData['memory_percent'],
-                                 pData['num_fds'],
-                                 *get_iocounters(pData),
-                                 cmd_data(pData),
-                                 pData['cwd']
-                                 )
+                stats = [datetime.now().strftime("%m-%d-%Y %H:%M:%S.%f"),
+                         proc_num,
+                         pData['ppid'],
+                         pData['name'],
+                         pData['num_threads'],
+                         *get_cputimes(pData),
+                         *get_meminfo(pData),
+                         pData['memory_percent'],
+                         pData['num_fds'],
+                         *get_iocounters(pData),
+                         cmd_data(pData),
+                         pData['cwd']]
+
+                stats_file.write(*stats)
 
             except psutil.NoSuchProcess as e:
                 # Comes when a process is killed between getting the number and getting the data
                 pass
             except AttributeError as e:
+                # logging.debug(f'Error ({type(e).__name__}): {e}')
                 pass
             except TypeError as e:
+                # logging.debug(f'Error ({type(e).__name__}): {e}')
                 pass
             except Exception as e:
                 logging.error(f'Error ({type(e).__name__}): {e}')
@@ -342,6 +372,9 @@ if __name__ == '__main__':
                         help="Moves file from 'running' to 'done' directories", default=False, action='store_true')
     parser.add_argument("-l", "--rolling", type=int, help="Time to roll file over to number to file name in ~minutes.",
                         default=0)
+    parser.add_argument("--json", default=False, action="store_true", help="Output JSON strings instead of CSV lines")
+    parser.add_argument("--envvar", action="append", default=[],
+                        help="add environment var to output (can be specified multiple times)")
 
     args = parser.parse_args()
 
@@ -358,6 +391,10 @@ if __name__ == '__main__':
     # so rolling*10 should be okay for minutes (on average)
     rolling = args.rolling * 10
 
+    # Get's the environment variables once and places them into a dict
+    env = {ev: os.getenv(ev) for ev in args.envvar}
+
     # Start the recorder
     runner(path=args.path, filename=args.outfile, pole_rate=args.rate,
-           username=args.user, write_header=args.no_header, move=args.move, rolling=rolling)
+           username=args.user, write_header=args.no_header, move=args.move,
+           rolling=rolling, json=args.json, env=env)

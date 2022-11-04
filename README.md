@@ -12,9 +12,9 @@ pip install pagurus
 ### Options
 
 ```
-usage: pagurus [-h] [-t TAG] [-o OUTFILE] [-p PATH] [-d] [-r RATE] [-u USER] [-noh] [-mv]
+usage: pagurus [-h] [-o OUTFILE] [-p PATH] [-d] [-r RATE] [-u USER] [-noh] [-mv] [-l ROLLING] [--json] [--envvar ENVVAR]
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
   -o OUTFILE, --outfile OUTFILE
                         File name for csv.
@@ -23,14 +23,18 @@ optional arguments:
   -r RATE, --rate RATE  Polling rate for process.
   -u USER, --user USER  Username to get stats for.
   -noh, --no-header     Turn off writting the header.
-  -mv, --move           Moves file from 'running' to 'complete'
+  -mv, --move           Moves file from 'running' to 'done' directories
+  -l ROLLING, --rolling ROLLING
+                        Time to roll file over to number to file name in ~minutes.
+  --json                Output JSON strings instead of CSV lines
+  --envvar ENVVAR       add environment var to output (can be specified multiple times)
 ```
 
 
 ### Running pagurus as a wrapper for a single user
 ```bash
 # Start running wrapper in the background for username
-pagurus -u username -mv -p /path/to/output/dir -o test.csv
+pagurus -u $USER -mv -p /path/to/output/dir -o test.csv
 # Get the previous running PID of pagurus
 export PID=$!
 # Sleep for a few seconds to let everything start running
