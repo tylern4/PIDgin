@@ -123,3 +123,7 @@ mem.png
 .vscode/settings.json
 running
 done
+
+# Added by cargo
+
+/target
